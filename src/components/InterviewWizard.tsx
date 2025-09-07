@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Upload, Play, Camera, Mic, BarChart3, FileText, Target, Brain, MessageSquare, Trophy } from 'lucide-react';
+import { Upload, Play, Camera, Mic, BarChart3, FileText, Target, Brain, MessageSquare, Trophy, MicOff, CameraOff, Pause } from 'lucide-react';
 
 type Step = 'welcome' | 'upload' | 'role' | 'interview' | 'analysis' | 'results';
 
@@ -11,6 +11,22 @@ const InterviewWizard = () => {
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [selectedRole, setSelectedRole] = useState<string>('');
   const [isInterviewActive, setIsInterviewActive] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isMicOn, setIsMicOn] = useState(false);
+  const [questionStartTime, setQuestionStartTime] = useState<number>(0);
+  const [timeRemaining, setTimeRemaining] = useState(90); // 90 seconds per question
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const questionTimer = useRef<NodeJS.Timeout>();
+  const countdownTimer = useRef<NodeJS.Timeout>();
+
+  const analysisMetrics = [
+    { label: 'Body Language', score: 85, icon: <Camera className="w-5 h-5" /> },
+    { label: 'Grammar & Speech', score: 92, icon: <MessageSquare className="w-5 h-5" /> },
+    { label: 'Role-Specific Skills', score: 78, icon: <Target className="w-5 h-5" /> },
+    { label: 'Confidence Level', score: 88, icon: <Brain className="w-5 h-5" /> }
+  ];
 
   const steps: Record<Step, number> = {
     welcome: 0,
@@ -34,22 +50,162 @@ const InterviewWizard = () => {
     'DevOps Engineer'
   ];
 
-  const mockQuestions = [
+  const personalQuestions = [
     "Tell me about yourself and your background",
-    "What interests you about this position?",
-    "Describe a challenging project you've worked on",
-    "How do you handle tight deadlines?",
-    "What are your greatest strengths?",
-    "How do you stay updated with industry trends?",
-    "Describe a time you solved a complex problem"
+    "What interests you about this position?"
   ];
 
-  const analysisMetrics = [
-    { label: 'Body Language', score: 85, icon: <Camera className="w-5 h-5" /> },
-    { label: 'Grammar & Speech', score: 92, icon: <MessageSquare className="w-5 h-5" /> },
-    { label: 'Role-Specific Skills', score: 78, icon: <Target className="w-5 h-5" /> },
-    { label: 'Confidence Level', score: 88, icon: <Brain className="w-5 h-5" /> }
-  ];
+  const roleSpecificQuestions: Record<string, string[]> = {
+    'Software Engineer': [
+      "Describe your experience with debugging complex software issues",
+      "How do you approach code reviews and collaboration?",
+      "Explain a challenging technical problem you solved recently",
+      "How do you stay updated with new programming languages and frameworks?",
+      "Describe your experience with system design and architecture"
+    ],
+    'Product Manager': [
+      "How do you prioritize features in a product roadmap?",
+      "Describe a time you had to make a difficult product decision",
+      "How do you gather and analyze user feedback?",
+      "Explain your approach to working with engineering teams",
+      "How do you measure product success?"
+    ],
+    'Data Scientist': [
+      "Describe your experience with machine learning algorithms",
+      "How do you handle missing or dirty data?",
+      "Explain a complex data analysis project you worked on",
+      "How do you communicate technical findings to non-technical stakeholders?",
+      "Describe your experience with statistical modeling"
+    ],
+    'UX Designer': [
+      "Walk me through your design process from concept to completion",
+      "How do you conduct user research and usability testing?",
+      "Describe a time you had to advocate for the user experience",
+      "How do you collaborate with developers and product managers?",
+      "Explain how you measure the success of your designs"
+    ],
+    'Sales Representative': [
+      "Describe your approach to building relationships with new clients",
+      "How do you handle objections during the sales process?",
+      "Tell me about a challenging deal you closed",
+      "How do you research prospects before making contact?",
+      "Describe your experience with CRM systems and sales tools"
+    ],
+    'Marketing Manager': [
+      "How do you develop and execute marketing campaigns?",
+      "Describe your experience with digital marketing channels",
+      "How do you measure marketing ROI and campaign effectiveness?",
+      "Tell me about a successful brand awareness campaign you led",
+      "How do you stay current with marketing trends and technologies?"
+    ],
+    'Business Analyst': [
+      "Describe your process for gathering and documenting requirements",
+      "How do you identify and analyze business processes for improvement?",
+      "Explain your experience with data analysis and reporting",
+      "How do you facilitate communication between stakeholders?",
+      "Describe a time you identified a significant business opportunity"
+    ],
+    'DevOps Engineer': [
+      "Describe your experience with CI/CD pipelines",
+      "How do you approach infrastructure automation and monitoring?",
+      "Explain a time you improved system reliability or performance",
+      "How do you handle incident response and troubleshooting?",
+      "Describe your experience with cloud platforms and containerization"
+    ]
+  };
+
+  const getCurrentQuestions = () => {
+    const roleQuestions = roleSpecificQuestions[selectedRole] || [];
+    return [...personalQuestions, ...roleQuestions];
+  };
+
+  const mockQuestions = getCurrentQuestions();
+
+  // Camera and microphone functions
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      setCameraStream(stream);
+      setIsCameraOn(true);
+      setIsMicOn(true);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      alert('Unable to access camera. Please allow camera permissions and try again.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+      setIsCameraOn(false);
+      setIsMicOn(false);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    }
+  };
+
+  const toggleMicrophone = () => {
+    if (cameraStream) {
+      const audioTracks = cameraStream.getAudioTracks();
+      audioTracks.forEach(track => {
+        track.enabled = !track.enabled;
+        setIsMicOn(track.enabled);
+      });
+    }
+  };
+
+  // Interview management functions
+  const startCountdown = () => {
+    setTimeRemaining(90);
+    countdownTimer.current = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 1) {
+          nextQuestion();
+          return 90;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const nextQuestion = () => {
+    if (currentQuestionIndex < mockQuestions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+      setTimeRemaining(90);
+      speakQuestion(mockQuestions[currentQuestionIndex + 1]);
+    } else {
+      endInterview();
+    }
+  };
+
+  const speakQuestion = (question: string) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(question);
+      utterance.rate = 0.8;
+      utterance.pitch = 1;
+      speechSynthesis.speak(utterance);
+    }
+  };
+
+  const endInterview = () => {
+    setIsInterviewActive(false);
+    if (countdownTimer.current) clearInterval(countdownTimer.current);
+    if (questionTimer.current) clearTimeout(questionTimer.current);
+    stopCamera();
+    setTimeout(() => {
+      setCurrentStep('analysis');
+    }, 1000);
+  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -58,13 +214,29 @@ const InterviewWizard = () => {
     }
   };
 
-  const startInterview = () => {
+  const startInterview = async () => {
+    await startCamera();
     setIsInterviewActive(true);
+    setCurrentQuestionIndex(0);
+    setQuestionStartTime(Date.now());
+    
+    // Start with first question after a brief delay
     setTimeout(() => {
-      setIsInterviewActive(false);
-      setCurrentStep('analysis');
-    }, 5000);
+      speakQuestion(mockQuestions[0]);
+      startCountdown();
+    }, 2000);
   };
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+      if (countdownTimer.current) clearInterval(countdownTimer.current);
+      if (questionTimer.current) clearTimeout(questionTimer.current);
+    };
+  }, [cameraStream]);
 
   const renderWelcomeScreen = () => (
     <div className="text-center animate-fade-in">
@@ -188,37 +360,100 @@ const InterviewWizard = () => {
       
       <div className="grid md:grid-cols-2 gap-8">
         <Card className="p-6">
-          <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-4">
-            <Camera className="w-16 h-16 text-muted-foreground" />
+          <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-4 relative overflow-hidden">
+            {isCameraOn ? (
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                className="w-full h-full object-cover rounded-lg"
+              />
+            ) : (
+              <Camera className="w-16 h-16 text-muted-foreground" />
+            )}
+            
+            {isInterviewActive && (
+              <div className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium">
+                ● REC
+              </div>
+            )}
           </div>
+          
           <div className="flex items-center justify-center space-x-4">
-            <Button variant="outline" size="sm">
-              <Camera className="w-4 h-4 mr-2" />
-              Camera
+            <Button 
+              variant={isCameraOn ? "default" : "outline"} 
+              size="sm"
+              onClick={isCameraOn ? stopCamera : startCamera}
+            >
+              {isCameraOn ? <Camera className="w-4 h-4 mr-2" /> : <CameraOff className="w-4 h-4 mr-2" />}
+              {isCameraOn ? 'Stop Camera' : 'Start Camera'}
             </Button>
-            <Button variant="outline" size="sm">
-              <Mic className="w-4 h-4 mr-2" />
-              Microphone
+            <Button 
+              variant={isMicOn ? "default" : "outline"} 
+              size="sm"
+              onClick={toggleMicrophone}
+              disabled={!isCameraOn}
+            >
+              {isMicOn ? <Mic className="w-4 h-4 mr-2" /> : <MicOff className="w-4 h-4 mr-2" />}
+              {isMicOn ? 'Mute' : 'Unmute'}
             </Button>
           </div>
         </Card>
         
         <Card className="p-6">
-          <h3 className="text-xl font-semibold mb-4">Current Question:</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold">Question {currentQuestionIndex + 1} of {mockQuestions.length}:</h3>
+            {isInterviewActive && (
+              <div className="text-sm text-muted-foreground">
+                Time: {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+              </div>
+            )}
+          </div>
+          
           <div className="bg-muted rounded-lg p-4 mb-6">
             <p className="text-lg">
-              {mockQuestions[0]}
+              {mockQuestions[currentQuestionIndex] || "Loading question..."}
             </p>
           </div>
           
+          {isInterviewActive && (
+            <div className="mb-4">
+              <Progress value={(90 - timeRemaining) / 90 * 100} className="h-2" />
+            </div>
+          )}
+          
           {!isInterviewActive ? (
-            <Button onClick={startInterview} variant="success" className="w-full">
-              Start Interview
-            </Button>
+            <div className="space-y-4">
+              <Button 
+                onClick={startInterview} 
+                variant="success" 
+                className="w-full"
+                disabled={!isCameraOn}
+              >
+                Start Interview
+              </Button>
+              {!isCameraOn && (
+                <p className="text-sm text-muted-foreground text-center">
+                  Please enable your camera first
+                </p>
+              )}
+            </div>
           ) : (
-            <div className="text-center">
-              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Recording your response...</p>
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-success border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-success font-medium">Recording your response...</p>
+                <p className="text-sm text-muted-foreground">Speak naturally and maintain eye contact</p>
+              </div>
+              
+              <div className="flex space-x-2">
+                <Button onClick={nextQuestion} variant="outline" className="flex-1">
+                  Next Question
+                </Button>
+                <Button onClick={endInterview} variant="destructive" className="flex-1">
+                  End Interview
+                </Button>
+              </div>
             </div>
           )}
         </Card>
