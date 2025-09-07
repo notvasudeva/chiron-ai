@@ -363,21 +363,46 @@ const InterviewWizard = () => {
         <div className="w-24 h-24 bg-gradient-primary rounded-full flex items-center justify-center mx-auto mb-6 shadow-elegant">
           <Trophy className="w-12 h-12 text-primary-foreground" />
         </div>
-        <h1 className="text-4xl font-bold mb-4 bg-gradient-hero bg-clip-text text-transparent">
-          AI Interview Coach
+        <h1 className="text-5xl font-bold mb-4 bg-gradient-hero bg-clip-text text-transparent">
+          ChironAI
         </h1>
-        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          Practice your interview skills with AI-powered feedback. Upload your resume, select your target role, and get personalized coaching.
+        <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-6">
+          Your AI-powered interview coach. Practice with confidence, get personalized feedback, 
+          and ace your next interview with expert guidance.
         </p>
+        
+        {/* Feature highlights */}
+        <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-8">
+          <div className="bg-card/50 backdrop-blur-sm rounded-lg p-6 border">
+            <FileText className="w-8 h-8 text-primary mx-auto mb-3" />
+            <h3 className="font-semibold mb-2">Resume Analysis</h3>
+            <p className="text-sm text-muted-foreground">Get detailed ATS compatibility scores and optimization tips</p>
+          </div>
+          <div className="bg-card/50 backdrop-blur-sm rounded-lg p-6 border">
+            <Camera className="w-8 h-8 text-primary mx-auto mb-3" />
+            <h3 className="font-semibold mb-2">Live Mock Interviews</h3>
+            <p className="text-sm text-muted-foreground">Practice with AI voice questions and real-time video analysis</p>
+          </div>
+          <div className="bg-card/50 backdrop-blur-sm rounded-lg p-6 border">
+            <BarChart3 className="w-8 h-8 text-primary mx-auto mb-3" />
+            <h3 className="font-semibold mb-2">Performance Insights</h3>
+            <p className="text-sm text-muted-foreground">Detailed feedback on body language, speech, and confidence</p>
+          </div>
+        </div>
       </div>
+      
       <Button 
         variant="hero" 
         size="lg" 
         onClick={() => setCurrentStep('upload')}
-        className="shadow-elegant hover:shadow-success transition-all duration-300"
+        className="shadow-elegant hover:shadow-success transition-all duration-300 text-lg px-8 py-4"
       >
         Start Your Practice Session
       </Button>
+      
+      <p className="text-sm text-muted-foreground mt-4">
+        Join thousands of professionals who improved their interview skills with ChironAI
+      </p>
     </div>
   );
 
