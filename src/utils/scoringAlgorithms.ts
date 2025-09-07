@@ -140,9 +140,10 @@ export const analyzeInterviewPerformance = (
     microphoneUsed: boolean;
     interviewCompleted: boolean;
     selectedRole: string;
+    interviewDuration: number; // total time spent in interview
   }
 ): InterviewAnalysis => {
-  const { questionsAnswered, totalQuestions, timeSpentPerQuestion, cameraUsed, microphoneUsed, interviewCompleted } = interviewData;
+  const { questionsAnswered, totalQuestions, timeSpentPerQuestion, cameraUsed, microphoneUsed, interviewCompleted, interviewDuration } = interviewData;
 
   let bodyLanguageScore = 0;
   let grammarScore = 0;
@@ -152,121 +153,201 @@ export const analyzeInterviewPerformance = (
   const strengths: string[] = [];
   const improvements: string[] = [];
 
-  // Body Language Score (based on camera usage and completion)
-  if (cameraUsed) {
-    bodyLanguageScore += 40;
-    strengths.push("Maintained visual presence during interview");
-  } else {
-    improvements.push("Enable camera for better engagement assessment");
-  }
-
-  if (interviewCompleted) {
-    bodyLanguageScore += 30;
-    confidenceScore += 20;
-    strengths.push("Completed the full interview session");
-  } else {
-    improvements.push("Try to complete all interview questions");
-  }
-
-  if (questionsAnswered >= totalQuestions * 0.8) {
-    bodyLanguageScore += 30;
-    strengths.push("Engaged with most interview questions");
-  } else {
-    bodyLanguageScore += Math.round((questionsAnswered / totalQuestions) * 30);
-    improvements.push("Answer more questions to demonstrate engagement");
-  }
-
-  // Grammar & Speech Score (based on microphone usage and time spent)
-  if (microphoneUsed) {
-    grammarScore += 50;
-    strengths.push("Audio engagement detected");
-  } else {
-    improvements.push("Enable microphone to assess verbal communication");
-  }
-
-  // Time analysis
+  // More realistic scoring system
+  const completionRate = questionsAnswered / totalQuestions;
   const avgTimePerQuestion = timeSpentPerQuestion.length > 0 
     ? timeSpentPerQuestion.reduce((a, b) => a + b, 0) / timeSpentPerQuestion.length 
     : 0;
 
-  if (avgTimePerQuestion >= 30 && avgTimePerQuestion <= 80) {
-    grammarScore += 30;
-    confidenceScore += 30;
-    strengths.push("Good response timing and thoughtfulness");
-  } else if (avgTimePerQuestion > 80) {
-    grammarScore += 20;
-    improvements.push("Try to be more concise in responses");
-  } else if (avgTimePerQuestion > 0) {
-    grammarScore += 15;
-    improvements.push("Take more time to provide detailed responses");
-  }
-
-  if (questionsAnswered > 0) {
-    grammarScore += 20;
-    strengths.push("Provided responses to interview questions");
+  // Body Language Score (0-100) - Much more strict
+  if (!cameraUsed) {
+    bodyLanguageScore = 0;
+    improvements.push("Camera not used - body language cannot be assessed");
   } else {
-    improvements.push("Provide verbal responses to questions");
+    bodyLanguageScore += 20; // Base points for camera usage
+    strengths.push("Camera enabled for visual assessment");
+
+    if (completionRate >= 0.9) {
+      bodyLanguageScore += 35;
+      strengths.push("Excellent visual engagement throughout interview");
+    } else if (completionRate >= 0.7) {
+      bodyLanguageScore += 25;
+      strengths.push("Good visual presence during most questions");
+    } else if (completionRate >= 0.5) {
+      bodyLanguageScore += 15;
+      improvements.push("Inconsistent visual engagement - try to stay focused");
+    } else {
+      bodyLanguageScore += 5;
+      improvements.push("Poor visual engagement - maintain eye contact and posture");
+    }
+
+    // Penalize for very short responses (indicates disengagement)
+    const shortResponseCount = timeSpentPerQuestion.filter(time => time < 15).length;
+    if (shortResponseCount > totalQuestions * 0.3) {
+      bodyLanguageScore -= 20;
+      improvements.push("Many responses were too brief - show more engagement");
+    }
+
+    // Bonus for consistent engagement
+    if (interviewCompleted && questionsAnswered === totalQuestions) {
+      bodyLanguageScore += 20;
+      strengths.push("Maintained visual engagement throughout full interview");
+    }
   }
 
-  // Skills Score (role-specific performance)
-  const completionRate = questionsAnswered / totalQuestions;
-  skillsScore = Math.round(completionRate * 60);
-
-  if (completionRate >= 0.8) {
-    skillsScore += 20;
-    strengths.push("Demonstrated thorough engagement with role-specific questions");
-  } else if (completionRate >= 0.5) {
-    skillsScore += 10;
-    improvements.push("Answer more role-specific questions to showcase expertise");
+  // Grammar & Speech Score (0-100) - Much more strict
+  if (!microphoneUsed) {
+    grammarScore = 0;
+    improvements.push("Microphone not used - speech cannot be assessed");
   } else {
-    improvements.push("Focus on completing more interview questions");
+    grammarScore += 15; // Base points for mic usage
+    strengths.push("Audio enabled for speech assessment");
+
+    // Response timing analysis
+    if (avgTimePerQuestion >= 45 && avgTimePerQuestion <= 75) {
+      grammarScore += 40;
+      strengths.push("Excellent response timing - thoughtful and detailed");
+    } else if (avgTimePerQuestion >= 30 && avgTimePerQuestion <= 45) {
+      grammarScore += 30;
+      strengths.push("Good response timing");
+    } else if (avgTimePerQuestion >= 20 && avgTimePerQuestion <= 30) {
+      grammarScore += 20;
+      improvements.push("Responses could be more detailed");
+    } else if (avgTimePerQuestion < 20) {
+      grammarScore += 10;
+      improvements.push("Responses too brief - provide more detailed answers");
+    } else {
+      grammarScore += 15;
+      improvements.push("Responses too long - try to be more concise");
+    }
+
+    // Consistency bonus
+    const timeVariance = timeSpentPerQuestion.length > 1 ? 
+      Math.sqrt(timeSpentPerQuestion.reduce((sum, time) => sum + Math.pow(time - avgTimePerQuestion, 2), 0) / timeSpentPerQuestion.length) : 0;
+    
+    if (timeVariance < 20) {
+      grammarScore += 25;
+      strengths.push("Consistent response quality across questions");
+    } else if (timeVariance < 30) {
+      grammarScore += 15;
+    } else {
+      grammarScore += 5;
+      improvements.push("Work on maintaining consistent response quality");
+    }
+
+    // Answer rate bonus
+    if (questionsAnswered === totalQuestions) {
+      grammarScore += 20;
+      strengths.push("Responded to all interview questions");
+    } else if (questionsAnswered >= totalQuestions * 0.8) {
+      grammarScore += 10;
+    }
   }
 
-  // Role-specific bonus
-  if (interviewCompleted && cameraUsed && microphoneUsed) {
-    skillsScore += 20;
-    strengths.push(`Strong preparation for ${interviewData.selectedRole} position`);
-  }
-
-  // Confidence Score
-  if (cameraUsed && microphoneUsed) {
-    confidenceScore += 40;
-    strengths.push("Confident use of technology and video interaction");
-  }
-
-  if (questionsAnswered === totalQuestions) {
-    confidenceScore += 30;
-    strengths.push("Consistent engagement throughout interview");
+  // Skills Score (0-100) - Based on actual engagement
+  if (questionsAnswered === 0) {
+    skillsScore = 0;
+    improvements.push("No questions answered - unable to assess role-specific skills");
   } else {
-    confidenceScore += Math.round((questionsAnswered / totalQuestions) * 30);
+    // Base score from completion
+    skillsScore = Math.round(completionRate * 40);
+
+    // Quality bonus based on time investment
+    if (avgTimePerQuestion >= 40) {
+      skillsScore += 30;
+      strengths.push("Demonstrated depth in role-specific responses");
+    } else if (avgTimePerQuestion >= 25) {
+      skillsScore += 20;
+      strengths.push("Adequate detail in responses");
+    } else {
+      skillsScore += 10;
+      improvements.push("Provide more detailed examples for role-specific questions");
+    }
+
+    // Full completion bonus
+    if (interviewCompleted && questionsAnswered === totalQuestions) {
+      skillsScore += 30;
+      strengths.push(`Comprehensive demonstration of ${interviewData.selectedRole} competencies`);
+    } else if (completionRate >= 0.7) {
+      skillsScore += 15;
+    }
   }
 
-  if (avgTimePerQuestion >= 20) {
-    confidenceScore += 10;
-    strengths.push("Thoughtful response approach");
+  // Confidence Score (0-100) - Overall performance
+  if (!cameraUsed && !microphoneUsed) {
+    confidenceScore = 0;
+    improvements.push("Technology not properly utilized - affects confidence assessment");
+  } else {
+    // Base confidence from tech usage
+    if (cameraUsed && microphoneUsed) {
+      confidenceScore += 30;
+      strengths.push("Confident technology usage");
+    } else if (cameraUsed || microphoneUsed) {
+      confidenceScore += 15;
+      improvements.push("Enable both camera and microphone for full assessment");
+    }
+
+    // Engagement confidence
+    if (completionRate >= 0.9) {
+      confidenceScore += 35;
+      strengths.push("High confidence demonstrated through consistent engagement");
+    } else if (completionRate >= 0.7) {
+      confidenceScore += 25;
+    } else if (completionRate >= 0.5) {
+      confidenceScore += 15;
+      improvements.push("Build confidence by completing more questions");
+    } else {
+      confidenceScore += 5;
+      improvements.push("Low engagement suggests confidence issues - practice more");
+    }
+
+    // Response quality confidence
+    if (avgTimePerQuestion >= 30) {
+      confidenceScore += 25;
+      strengths.push("Confident, thoughtful responses");
+    } else if (avgTimePerQuestion >= 20) {
+      confidenceScore += 15;
+    } else {
+      confidenceScore += 5;
+      improvements.push("Brief responses may indicate lack of confidence");
+    }
+
+    // Interview completion confidence
+    if (interviewCompleted) {
+      confidenceScore += 10;
+      strengths.push("Confidence to complete full interview process");
+    }
   }
+
+  // Cap all scores at 100
+  bodyLanguageScore = Math.min(bodyLanguageScore, 100);
+  grammarScore = Math.min(grammarScore, 100);
+  skillsScore = Math.min(skillsScore, 100);
+  confidenceScore = Math.min(confidenceScore, 100);
 
   // Overall score calculation
   const overallScore = Math.round((bodyLanguageScore + grammarScore + skillsScore + confidenceScore) / 4);
 
-  // Generate feedback
+  // Generate more realistic feedback
   let feedback = "";
   if (overallScore >= 80) {
-    feedback = "Excellent interview performance! Strong engagement, communication skills, and technical competency demonstrated.";
-  } else if (overallScore >= 60) {
-    feedback = "Good interview performance with solid communication skills. Some areas for improvement identified.";
-  } else if (overallScore >= 40) {
-    feedback = "Fair interview performance. Focus on engagement, completion, and using all available tools (camera/microphone).";
+    feedback = "Outstanding interview performance! Excellent preparation, engagement, and professional presence demonstrated.";
+  } else if (overallScore >= 65) {
+    feedback = "Strong interview performance with good communication and engagement. Minor improvements identified.";
+  } else if (overallScore >= 50) {
+    feedback = "Adequate interview performance with room for improvement in engagement and response quality.";
+  } else if (overallScore >= 25) {
+    feedback = "Below average performance. Focus on using technology properly and answering more questions thoroughly.";
   } else {
-    feedback = "Interview performance needs improvement. Practice with the full interview setup and complete all questions.";
+    feedback = "Poor interview performance. Complete the full interview with camera and microphone enabled for better assessment.";
   }
 
   return {
-    overallScore: Math.min(overallScore, 100),
-    bodyLanguageScore: Math.min(bodyLanguageScore, 100),
-    grammarScore: Math.min(grammarScore, 100),
-    skillsScore: Math.min(skillsScore, 100),
-    confidenceScore: Math.min(confidenceScore, 100),
+    overallScore,
+    bodyLanguageScore,
+    grammarScore,
+    skillsScore,
+    confidenceScore,
     feedback,
     strengths,
     improvements
