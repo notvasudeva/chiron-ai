@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Upload, Play, Camera, Mic, BarChart3, FileText, Target, Brain, MessageSquare, Trophy, MicOff, CameraOff, Pause } from 'lucide-react';
+import { analyzeResume, analyzeInterviewPerformance, type ResumeAnalysis, type InterviewAnalysis } from '@/utils/scoringAlgorithms';
 
 type Step = 'welcome' | 'upload' | 'role' | 'interview' | 'analysis' | 'results';
 
@@ -17,16 +18,15 @@ const InterviewWizard = () => {
   const [isMicOn, setIsMicOn] = useState(false);
   const [questionStartTime, setQuestionStartTime] = useState<number>(0);
   const [timeRemaining, setTimeRemaining] = useState(90); // 90 seconds per question
+  const [timeSpentPerQuestion, setTimeSpentPerQuestion] = useState<number[]>([]);
+  const [questionsAnswered, setQuestionsAnswered] = useState(0);
+  const [interviewCompleted, setInterviewCompleted] = useState(false);
+  const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAnalysis | null>(null);
+  const [interviewAnalysis, setInterviewAnalysis] = useState<InterviewAnalysis | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const questionTimer = useRef<NodeJS.Timeout>();
   const countdownTimer = useRef<NodeJS.Timeout>();
 
-  const analysisMetrics = [
-    { label: 'Body Language', score: 85, icon: <Camera className="w-5 h-5" /> },
-    { label: 'Grammar & Speech', score: 92, icon: <MessageSquare className="w-5 h-5" /> },
-    { label: 'Role-Specific Skills', score: 78, icon: <Target className="w-5 h-5" /> },
-    { label: 'Confidence Level', score: 88, icon: <Brain className="w-5 h-5" /> }
-  ];
 
   const steps: Record<Step, number> = {
     welcome: 0,
@@ -179,6 +179,11 @@ const InterviewWizard = () => {
   };
 
   const nextQuestion = () => {
+    // Record time spent on current question
+    const timeSpent = 90 - timeRemaining;
+    setTimeSpentPerQuestion(prev => [...prev, timeSpent]);
+    setQuestionsAnswered(prev => prev + 1);
+    
     if (currentQuestionIndex < mockQuestions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
       setTimeRemaining(90);
@@ -199,9 +204,36 @@ const InterviewWizard = () => {
 
   const endInterview = () => {
     setIsInterviewActive(false);
+    setInterviewCompleted(currentQuestionIndex === mockQuestions.length - 1);
+    
+    // Record final question time if interview ended early
+    if (currentQuestionIndex < mockQuestions.length) {
+      const timeSpent = 90 - timeRemaining;
+      setTimeSpentPerQuestion(prev => [...prev, timeSpent]);
+      if (timeSpent > 10) { // Only count as answered if they spent more than 10 seconds
+        setQuestionsAnswered(prev => prev + 1);
+      }
+    }
+    
     if (countdownTimer.current) clearInterval(countdownTimer.current);
     if (questionTimer.current) clearTimeout(questionTimer.current);
     stopCamera();
+    
+    // Analyze performance and resume
+    const resumeResult = analyzeResume(resumeFile, selectedRole);
+    setResumeAnalysis(resumeResult);
+    
+    const interviewResult = analyzeInterviewPerformance({
+      questionsAnswered,
+      totalQuestions: mockQuestions.length,
+      timeSpentPerQuestion,
+      cameraUsed: isCameraOn,
+      microphoneUsed: isMicOn,
+      interviewCompleted: currentQuestionIndex >= mockQuestions.length - 1,
+      selectedRole
+    });
+    setInterviewAnalysis(interviewResult);
+    
     setTimeout(() => {
       setCurrentStep('analysis');
     }, 1000);
@@ -461,111 +493,194 @@ const InterviewWizard = () => {
     </div>
   );
 
-  const renderAnalysisScreen = () => (
-    <div className="max-w-4xl mx-auto animate-fade-in">
-      <div className="text-center mb-8">
-        <BarChart3 className="w-16 h-16 text-primary mx-auto mb-4" />
-        <h2 className="text-3xl font-bold mb-4">Analyzing Your Performance</h2>
-        <p className="text-muted-foreground">
-          Our AI is evaluating your interview responses across multiple dimensions.
-        </p>
+  const renderAnalysisScreen = () => {
+    const analysisMetrics = interviewAnalysis ? [
+      { label: 'Body Language', score: interviewAnalysis.bodyLanguageScore, icon: <Camera className="w-5 h-5" /> },
+      { label: 'Grammar & Speech', score: interviewAnalysis.grammarScore, icon: <MessageSquare className="w-5 h-5" /> },
+      { label: 'Role-Specific Skills', score: interviewAnalysis.skillsScore, icon: <Target className="w-5 h-5" /> },
+      { label: 'Confidence Level', score: interviewAnalysis.confidenceScore, icon: <Brain className="w-5 h-5" /> }
+    ] : [];
+
+    return (
+      <div className="max-w-4xl mx-auto animate-fade-in">
+        <div className="text-center mb-8">
+          <BarChart3 className="w-16 h-16 text-primary mx-auto mb-4" />
+          <h2 className="text-3xl font-bold mb-4">Analyzing Your Performance</h2>
+          <p className="text-muted-foreground">
+            Our AI is evaluating your interview responses across multiple dimensions.
+          </p>
+        </div>
+        
+        {interviewAnalysis ? (
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            {analysisMetrics.map((metric) => (
+              <Card key={metric.label} className="p-6">
+                <div className="flex items-center mb-4">
+                  {metric.icon}
+                  <h3 className="text-lg font-semibold ml-3">{metric.label}</h3>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Score</span>
+                    <span>{metric.score}%</span>
+                  </div>
+                  <Progress value={metric.score} className="h-2" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-success border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Processing performance analysis...</p>
+          </div>
+        )}
+        
+        <div className="text-center">
+          <Button 
+            onClick={() => setCurrentStep('results')} 
+            variant="outline" 
+            className="mt-4"
+            disabled={!interviewAnalysis}
+          >
+            View Results
+          </Button>
+        </div>
       </div>
-      
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
-        {analysisMetrics.map((metric, index) => (
-          <Card key={metric.label} className="p-6">
-            <div className="flex items-center mb-4">
-              {metric.icon}
-              <h3 className="text-lg font-semibold ml-3">{metric.label}</h3>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Score</span>
-                <span>{metric.score}%</span>
+    );
+  };
+
+  const renderResultsScreen = () => {
+    const atsScore = resumeAnalysis?.atsScore || 0;
+    const interviewScore = interviewAnalysis?.overallScore || 0;
+    
+    return (
+      <div className="max-w-4xl mx-auto animate-fade-in">
+        <div className="text-center mb-8">
+          <Trophy className="w-16 h-16 text-success mx-auto mb-4" />
+          <h2 className="text-3xl font-bold mb-4">Your Interview Results</h2>
+          <p className="text-muted-foreground">
+            Here's your comprehensive performance analysis and recommendations.
+          </p>
+        </div>
+        
+        <div className="grid md:grid-cols-2 gap-8 mb-8">
+          <Card className="p-6">
+            <h3 className="text-xl font-semibold mb-4">Resume ATS Score</h3>
+            <div className="text-center">
+              <div className={`text-4xl font-bold mb-2 ${
+                atsScore >= 80 ? 'text-success' : 
+                atsScore >= 60 ? 'text-accent' : 'text-destructive'
+              }`}>
+                {atsScore}%
               </div>
-              <Progress value={metric.score} className="h-2" />
+              <p className="text-muted-foreground">ATS Compatibility</p>
+              <div className={`mt-4 p-4 rounded-lg ${
+                atsScore >= 80 ? 'bg-success/10' : 
+                atsScore >= 60 ? 'bg-accent/10' : 'bg-destructive/10'
+              }`}>
+                <p className="text-sm">
+                  {resumeAnalysis?.feedback || "No resume uploaded for analysis."}
+                </p>
+              </div>
             </div>
           </Card>
-        ))}
-      </div>
-      
-      <div className="text-center">
-        <div className="w-16 h-16 border-4 border-success border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-muted-foreground">Processing complete analysis...</p>
-        <Button 
-          onClick={() => setCurrentStep('results')} 
-          variant="outline" 
-          className="mt-4"
-        >
-          View Results
-        </Button>
-      </div>
-    </div>
-  );
-
-  const renderResultsScreen = () => (
-    <div className="max-w-4xl mx-auto animate-fade-in">
-      <div className="text-center mb-8">
-        <Trophy className="w-16 h-16 text-success mx-auto mb-4" />
-        <h2 className="text-3xl font-bold mb-4">Your Interview Results</h2>
-        <p className="text-muted-foreground">
-          Here's your comprehensive performance analysis and recommendations.
-        </p>
-      </div>
-      
-      <div className="grid md:grid-cols-2 gap-8 mb-8">
-        <Card className="p-6">
-          <h3 className="text-xl font-semibold mb-4">Resume ATS Score</h3>
-          <div className="text-center">
-            <div className="text-4xl font-bold text-success mb-2">87%</div>
-            <p className="text-muted-foreground">ATS Compatibility</p>
-            <div className="mt-4 p-4 bg-success/10 rounded-lg">
-              <p className="text-sm">
-                Your resume is well-optimized for applicant tracking systems with strong keyword matching.
-              </p>
+          
+          <Card className="p-6">
+            <h3 className="text-xl font-semibold mb-4">Interview Performance</h3>
+            <div className="text-center">
+              <div className={`text-4xl font-bold mb-2 ${
+                interviewScore >= 80 ? 'text-success' : 
+                interviewScore >= 60 ? 'text-primary' : 'text-destructive'
+              }`}>
+                {interviewScore}%
+              </div>
+              <p className="text-muted-foreground">Overall Score</p>
+              <div className={`mt-4 p-4 rounded-lg ${
+                interviewScore >= 80 ? 'bg-success/10' : 
+                interviewScore >= 60 ? 'bg-primary/10' : 'bg-destructive/10'
+              }`}>
+                <p className="text-sm">
+                  {interviewAnalysis?.feedback || "Interview not completed."}
+                </p>
+              </div>
             </div>
+          </Card>
+        </div>
+        
+        <Card className="p-6 mb-8">
+          <h3 className="text-xl font-semibold mb-4">Detailed Feedback</h3>
+          <div className="space-y-4">
+            {(resumeAnalysis?.strengths.length || 0) > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-success">Resume Strengths:</h4>
+                {resumeAnalysis?.strengths.map((strength, index) => (
+                  <div key={index} className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-success rounded-full mt-2"></div>
+                    <p className="text-sm">{strength}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {(interviewAnalysis?.strengths.length || 0) > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-primary">Interview Strengths:</h4>
+                {interviewAnalysis?.strengths.map((strength, index) => (
+                  <div key={index} className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
+                    <p className="text-sm">{strength}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {(resumeAnalysis?.improvements.length || 0) > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-accent">Resume Recommendations:</h4>
+                {resumeAnalysis?.improvements.map((improvement, index) => (
+                  <div key={index} className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-accent rounded-full mt-2"></div>
+                    <p className="text-sm">{improvement}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {(interviewAnalysis?.improvements.length || 0) > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-accent">Interview Recommendations:</h4>
+                {interviewAnalysis?.improvements.map((improvement, index) => (
+                  <div key={index} className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-accent rounded-full mt-2"></div>
+                    <p className="text-sm">{improvement}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </Card>
         
-        <Card className="p-6">
-          <h3 className="text-xl font-semibold mb-4">Interview Performance</h3>
-          <div className="text-center">
-            <div className="text-4xl font-bold text-primary mb-2">85%</div>
-            <p className="text-muted-foreground">Overall Score</p>
-            <div className="mt-4 p-4 bg-primary/10 rounded-lg">
-              <p className="text-sm">
-                Strong performance with excellent communication skills and relevant experience demonstration.
-              </p>
-            </div>
-          </div>
-        </Card>
-      </div>
-      
-      <Card className="p-6 mb-8">
-        <h3 className="text-xl font-semibold mb-4">Detailed Feedback</h3>
-        <div className="space-y-4">
-          <div className="flex items-start space-x-3">
-            <div className="w-2 h-2 bg-success rounded-full mt-2"></div>
-            <p><strong>Strengths:</strong> Clear articulation, confident body language, and relevant examples.</p>
-          </div>
-          <div className="flex items-start space-x-3">
-            <div className="w-2 h-2 bg-accent rounded-full mt-2"></div>
-            <p><strong>Areas for Improvement:</strong> Consider providing more specific metrics in your examples.</p>
-          </div>
-          <div className="flex items-start space-x-3">
-            <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
-            <p><strong>Recommendations:</strong> Practice the STAR method for behavioral questions.</p>
-          </div>
+        <div className="text-center">
+          <Button onClick={() => {
+            // Reset all state for new session
+            setCurrentStep('welcome');
+            setResumeFile(null);
+            setSelectedRole('');
+            setCurrentQuestionIndex(0);
+            setQuestionsAnswered(0);
+            setTimeSpentPerQuestion([]);
+            setInterviewCompleted(false);
+            setResumeAnalysis(null);
+            setInterviewAnalysis(null);
+            setIsInterviewActive(false);
+          }} variant="primary" size="lg">
+            Start New Practice Session
+          </Button>
         </div>
-      </Card>
-      
-      <div className="text-center">
-        <Button onClick={() => setCurrentStep('welcome')} variant="primary" size="lg">
-          Start New Practice Session
-        </Button>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderCurrentStep = () => {
     switch (currentStep) {
