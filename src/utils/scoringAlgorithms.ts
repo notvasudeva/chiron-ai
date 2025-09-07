@@ -140,7 +140,7 @@ export const analyzeInterviewPerformance = (
     microphoneUsed: boolean;
     interviewCompleted: boolean;
     selectedRole: string;
-    interviewDuration: number; // total time spent in interview
+    interviewDuration: number;
   }
 ): InterviewAnalysis => {
   const { questionsAnswered, totalQuestions, timeSpentPerQuestion, cameraUsed, microphoneUsed, interviewCompleted, interviewDuration } = interviewData;
@@ -153,193 +153,185 @@ export const analyzeInterviewPerformance = (
   const strengths: string[] = [];
   const improvements: string[] = [];
 
-  // More realistic scoring system
+  // Calculate basic metrics
   const completionRate = questionsAnswered / totalQuestions;
   const avgTimePerQuestion = timeSpentPerQuestion.length > 0 
     ? timeSpentPerQuestion.reduce((a, b) => a + b, 0) / timeSpentPerQuestion.length 
     : 0;
 
-  // Body Language Score (0-100) - Much more strict
+  // MUCH MORE STRICT SCORING - No participation = extremely low scores
+
+  // Body Language Score (0-100) - ZERO tolerance for no camera
   if (!cameraUsed) {
     bodyLanguageScore = 0;
-    improvements.push("Camera not used - body language cannot be assessed");
+    improvements.push("Camera was not enabled - body language assessment impossible");
+    improvements.push("Professional interviews require visual presence");
   } else {
-    bodyLanguageScore += 20; // Base points for camera usage
-    strengths.push("Camera enabled for visual assessment");
-
-    if (completionRate >= 0.9) {
-      bodyLanguageScore += 35;
-      strengths.push("Excellent visual engagement throughout interview");
-    } else if (completionRate >= 0.7) {
-      bodyLanguageScore += 25;
+    // Even with camera, need substantial engagement
+    if (questionsAnswered === 0) {
+      bodyLanguageScore = 5; // Almost nothing for no engagement
+      improvements.push("No questions answered despite camera being on");
+    } else if (completionRate < 0.3) {
+      bodyLanguageScore = 10;
+      improvements.push("Very poor engagement - answered less than 30% of questions");
+    } else if (completionRate < 0.5) {
+      bodyLanguageScore = 25;
+      improvements.push("Poor engagement - complete more questions for better assessment");
+    } else if (completionRate < 0.7) {
+      bodyLanguageScore = 45;
+      strengths.push("Moderate visual engagement");
+      improvements.push("Aim to answer at least 70% of questions");
+    } else if (completionRate < 0.9) {
+      bodyLanguageScore = 70;
       strengths.push("Good visual presence during most questions");
-    } else if (completionRate >= 0.5) {
-      bodyLanguageScore += 15;
-      improvements.push("Inconsistent visual engagement - try to stay focused");
     } else {
-      bodyLanguageScore += 5;
-      improvements.push("Poor visual engagement - maintain eye contact and posture");
+      bodyLanguageScore = 85;
+      strengths.push("Excellent visual engagement throughout interview");
     }
 
-    // Penalize for very short responses (indicates disengagement)
-    const shortResponseCount = timeSpentPerQuestion.filter(time => time < 15).length;
-    if (shortResponseCount > totalQuestions * 0.3) {
-      bodyLanguageScore -= 20;
-      improvements.push("Many responses were too brief - show more engagement");
+    // Penalty for very brief responses (shows disinterest)
+    const veryShortResponses = timeSpentPerQuestion.filter(time => time < 10).length;
+    if (veryShortResponses > questionsAnswered * 0.5) {
+      bodyLanguageScore = Math.max(bodyLanguageScore - 30, 0);
+      improvements.push("Too many extremely brief responses - shows lack of preparation");
     }
 
-    // Bonus for consistent engagement
-    if (interviewCompleted && questionsAnswered === totalQuestions) {
-      bodyLanguageScore += 20;
-      strengths.push("Maintained visual engagement throughout full interview");
+    // Bonus only for full completion with good timing
+    if (interviewCompleted && avgTimePerQuestion >= 20) {
+      bodyLanguageScore = Math.min(bodyLanguageScore + 15, 100);
+      strengths.push("Completed full interview with good engagement");
     }
   }
 
-  // Grammar & Speech Score (0-100) - Much more strict
+  // Grammar & Speech Score (0-100) - ZERO tolerance for no microphone
   if (!microphoneUsed) {
     grammarScore = 0;
-    improvements.push("Microphone not used - speech cannot be assessed");
+    improvements.push("Microphone was not enabled - speech assessment impossible");
+    improvements.push("Verbal communication skills could not be evaluated");
   } else {
-    grammarScore += 15; // Base points for mic usage
-    strengths.push("Audio enabled for speech assessment");
-
-    // Response timing analysis
-    if (avgTimePerQuestion >= 45 && avgTimePerQuestion <= 75) {
-      grammarScore += 40;
-      strengths.push("Excellent response timing - thoughtful and detailed");
-    } else if (avgTimePerQuestion >= 30 && avgTimePerQuestion <= 45) {
-      grammarScore += 30;
-      strengths.push("Good response timing");
-    } else if (avgTimePerQuestion >= 20 && avgTimePerQuestion <= 30) {
-      grammarScore += 20;
-      improvements.push("Responses could be more detailed");
-    } else if (avgTimePerQuestion < 20) {
-      grammarScore += 10;
-      improvements.push("Responses too brief - provide more detailed answers");
+    // Even with microphone, need actual responses
+    if (questionsAnswered === 0) {
+      grammarScore = 3; // Almost nothing
+      improvements.push("Microphone enabled but no verbal responses detected");
+    } else if (avgTimePerQuestion < 5) {
+      grammarScore = 8;
+      improvements.push("Responses too brief to assess communication skills");
+    } else if (avgTimePerQuestion < 15) {
+      grammarScore = 20;
+      improvements.push("Responses very brief - provide more detailed answers");
+    } else if (avgTimePerQuestion < 30) {
+      grammarScore = 40;
+      improvements.push("Responses somewhat brief - add more detail and examples");
+    } else if (avgTimePerQuestion < 60) {
+      grammarScore = 70;
+      strengths.push("Good response length and detail");
+    } else if (avgTimePerQuestion <= 80) {
+      grammarScore = 85;
+      strengths.push("Excellent detailed responses");
     } else {
-      grammarScore += 15;
-      improvements.push("Responses too long - try to be more concise");
+      grammarScore = 65;
+      improvements.push("Responses quite lengthy - practice being more concise");
     }
 
-    // Consistency bonus
-    const timeVariance = timeSpentPerQuestion.length > 1 ? 
-      Math.sqrt(timeSpentPerQuestion.reduce((sum, time) => sum + Math.pow(time - avgTimePerQuestion, 2), 0) / timeSpentPerQuestion.length) : 0;
-    
-    if (timeVariance < 20) {
-      grammarScore += 25;
-      strengths.push("Consistent response quality across questions");
-    } else if (timeVariance < 30) {
-      grammarScore += 15;
-    } else {
-      grammarScore += 5;
-      improvements.push("Work on maintaining consistent response quality");
+    // Major penalty for inconsistent engagement
+    if (completionRate < 0.5) {
+      grammarScore = Math.max(grammarScore * 0.4, 0); // Cut score dramatically
+      improvements.push("Inconsistent verbal participation severely impacts assessment");
     }
 
-    // Answer rate bonus
-    if (questionsAnswered === totalQuestions) {
-      grammarScore += 20;
-      strengths.push("Responded to all interview questions");
-    } else if (questionsAnswered >= totalQuestions * 0.8) {
-      grammarScore += 10;
+    // Response quality bonus only for good performers
+    if (questionsAnswered >= totalQuestions * 0.8 && avgTimePerQuestion >= 25) {
+      grammarScore = Math.min(grammarScore + 15, 100);
+      strengths.push("Consistent, thoughtful verbal responses");
     }
   }
 
-  // Skills Score (0-100) - Based on actual engagement
+  // Skills Score (0-100) - Purely based on actual demonstration
   if (questionsAnswered === 0) {
     skillsScore = 0;
-    improvements.push("No questions answered - unable to assess role-specific skills");
+    improvements.push("No questions answered - cannot assess role-specific skills");
+    improvements.push("Complete the interview to demonstrate your capabilities");
+  } else if (questionsAnswered === 1) {
+    skillsScore = 10;
+    improvements.push("Only 1 question answered - insufficient to assess skills");
+  } else if (completionRate < 0.3) {
+    skillsScore = 15;
+    improvements.push("Very limited skill demonstration - answer more questions");
+  } else if (completionRate < 0.5) {
+    skillsScore = 30;
+    improvements.push("Basic skill demonstration - complete more questions to showcase expertise");
+  } else if (completionRate < 0.7) {
+    skillsScore = 50;
+    strengths.push("Moderate demonstration of role-relevant skills");
+    improvements.push("Answer more questions to fully showcase your abilities");
+  } else if (completionRate < 0.9) {
+    skillsScore = 75;
+    strengths.push("Good demonstration of role-specific competencies");
   } else {
-    // Base score from completion
-    skillsScore = Math.round(completionRate * 40);
-
-    // Quality bonus based on time investment
-    if (avgTimePerQuestion >= 40) {
-      skillsScore += 30;
-      strengths.push("Demonstrated depth in role-specific responses");
-    } else if (avgTimePerQuestion >= 25) {
-      skillsScore += 20;
-      strengths.push("Adequate detail in responses");
-    } else {
-      skillsScore += 10;
-      improvements.push("Provide more detailed examples for role-specific questions");
-    }
-
-    // Full completion bonus
-    if (interviewCompleted && questionsAnswered === totalQuestions) {
-      skillsScore += 30;
-      strengths.push(`Comprehensive demonstration of ${interviewData.selectedRole} competencies`);
-    } else if (completionRate >= 0.7) {
-      skillsScore += 15;
-    }
+    skillsScore = 90;
+    strengths.push(`Comprehensive demonstration of ${interviewData.selectedRole} expertise`);
   }
 
-  // Confidence Score (0-100) - Overall performance
-  if (!cameraUsed && !microphoneUsed) {
-    confidenceScore = 0;
-    improvements.push("Technology not properly utilized - affects confidence assessment");
-  } else {
-    // Base confidence from tech usage
-    if (cameraUsed && microphoneUsed) {
-      confidenceScore += 30;
-      strengths.push("Confident technology usage");
-    } else if (cameraUsed || microphoneUsed) {
-      confidenceScore += 15;
-      improvements.push("Enable both camera and microphone for full assessment");
-    }
-
-    // Engagement confidence
-    if (completionRate >= 0.9) {
-      confidenceScore += 35;
-      strengths.push("High confidence demonstrated through consistent engagement");
-    } else if (completionRate >= 0.7) {
-      confidenceScore += 25;
-    } else if (completionRate >= 0.5) {
-      confidenceScore += 15;
-      improvements.push("Build confidence by completing more questions");
-    } else {
-      confidenceScore += 5;
-      improvements.push("Low engagement suggests confidence issues - practice more");
-    }
-
-    // Response quality confidence
-    if (avgTimePerQuestion >= 30) {
-      confidenceScore += 25;
-      strengths.push("Confident, thoughtful responses");
-    } else if (avgTimePerQuestion >= 20) {
-      confidenceScore += 15;
-    } else {
-      confidenceScore += 5;
-      improvements.push("Brief responses may indicate lack of confidence");
-    }
-
-    // Interview completion confidence
-    if (interviewCompleted) {
-      confidenceScore += 10;
-      strengths.push("Confidence to complete full interview process");
-    }
+  // Quality penalty for rushed responses
+  if (avgTimePerQuestion < 15 && questionsAnswered > 0) {
+    skillsScore = Math.max(skillsScore - 25, 0);
+    improvements.push("Rushed responses don't demonstrate depth of knowledge");
   }
 
-  // Cap all scores at 100
-  bodyLanguageScore = Math.min(bodyLanguageScore, 100);
-  grammarScore = Math.min(grammarScore, 100);
-  skillsScore = Math.min(skillsScore, 100);
-  confidenceScore = Math.min(confidenceScore, 100);
+  // Confidence Score (0-100) - Requires both tech usage AND performance
+  if (!cameraUsed || !microphoneUsed) {
+    confidenceScore = 5; // Minimal score for technical issues
+    improvements.push("Unable to assess confidence without full technology setup");
+  } else if (questionsAnswered === 0) {
+    confidenceScore = 5;
+    improvements.push("No engagement suggests very low confidence");
+  } else if (completionRate < 0.3) {
+    confidenceScore = 15;
+    improvements.push("Very low completion suggests confidence issues");
+  } else if (completionRate < 0.5) {
+    confidenceScore = 30;
+    improvements.push("Low completion rate may indicate lack of confidence");
+  } else if (completionRate < 0.7) {
+    confidenceScore = 50;
+    improvements.push("Build confidence by completing more questions");
+  } else if (completionRate < 0.9) {
+    confidenceScore = 75;
+    strengths.push("Good confidence demonstrated through engagement");
+  } else {
+    confidenceScore = 90;
+    strengths.push("High confidence shown through complete participation");
+  }
 
-  // Overall score calculation
+  // Response quality impact on confidence
+  if (avgTimePerQuestion >= 30 && questionsAnswered > 0) {
+    confidenceScore = Math.min(confidenceScore + 10, 100);
+    strengths.push("Confident, detailed responses");
+  } else if (avgTimePerQuestion < 10 && questionsAnswered > 0) {
+    confidenceScore = Math.max(confidenceScore - 20, 0);
+    improvements.push("Very brief responses suggest nervousness or lack of preparation");
+  }
+
+  // Calculate overall score
   const overallScore = Math.round((bodyLanguageScore + grammarScore + skillsScore + confidenceScore) / 4);
 
-  // Generate more realistic feedback
+  // Much more realistic and harsh feedback
   let feedback = "";
-  if (overallScore >= 80) {
-    feedback = "Outstanding interview performance! Excellent preparation, engagement, and professional presence demonstrated.";
-  } else if (overallScore >= 65) {
-    feedback = "Strong interview performance with good communication and engagement. Minor improvements identified.";
-  } else if (overallScore >= 50) {
-    feedback = "Adequate interview performance with room for improvement in engagement and response quality.";
-  } else if (overallScore >= 25) {
-    feedback = "Below average performance. Focus on using technology properly and answering more questions thoroughly.";
+  if (overallScore === 0) {
+    feedback = "No interview participation detected. Please restart with camera and microphone enabled, and answer the questions.";
+  } else if (overallScore < 15) {
+    feedback = "Extremely poor performance. Interview was not completed properly. Please try again with full setup and engagement.";
+  } else if (overallScore < 30) {
+    feedback = "Very poor interview performance. Major improvements needed in preparation, technology setup, and engagement.";
+  } else if (overallScore < 45) {
+    feedback = "Below average performance. Focus on completing all questions, using proper technology, and providing detailed responses.";
+  } else if (overallScore < 60) {
+    feedback = "Average performance with significant room for improvement. Work on consistency and response quality.";
+  } else if (overallScore < 75) {
+    feedback = "Good performance with some areas for improvement. You're on the right track but can enhance your responses.";
+  } else if (overallScore < 85) {
+    feedback = "Strong interview performance! Excellent engagement and communication skills demonstrated.";
   } else {
-    feedback = "Poor interview performance. Complete the full interview with camera and microphone enabled for better assessment.";
+    feedback = "Outstanding interview performance! Professional, confident, and comprehensive responses throughout.";
   }
 
   return {
