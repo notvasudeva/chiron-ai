@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChironAI - Interview Assistant</title>
+    <link rel="stylesheet" href="minimal.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Welcome Screen -->
+        <div id="welcome" class="screen active">
+            <div class="container">
+                <h1>ChironAI</h1>
+                <p>AI-Powered Interview Coach</p>
+                <div class="features">
+                    <div class="feature">📹 Live Video Analysis</div>
+                    <div class="feature">🎯 ATS Resume Scoring</div>
+                    <div class="feature">💬 Real-time Feedback</div>
+                </div>
+                <button onclick="goToStep('upload')">Start Interview</button>
+            </div>
+        </div>
+
+        <!-- Upload Screen -->
+        <div id="upload" class="screen">
+            <div class="container">
+                <h2>Upload Resume</h2>
+                <div class="upload-area" onclick="document.getElementById('resume').click()">
+                    <div id="upload-text">Click to upload resume (PDF, DOC, DOCX)</div>
+                    <input type="file" id="resume" accept=".pdf,.doc,.docx" style="display:none" onchange="handleFileUpload(event)">
+                </div>
+                <button id="next-role" onclick="goToStep('role')" disabled>Continue</button>
+            </div>
+        </div>
+
+        <!-- Role Selection -->
+        <div id="role" class="screen">
+            <div class="container">
+                <h2>Select Your Role</h2>
+                <div class="roles">
+                    <button class="role-btn" onclick="selectRole('Software Engineer')">Software Engineer</button>
+                    <button class="role-btn" onclick="selectRole('Product Manager')">Product Manager</button>
+                    <button class="role-btn" onclick="selectRole('Data Scientist')">Data Scientist</button>
+                    <button class="role-btn" onclick="selectRole('UX Designer')">UX Designer</button>
+                    <button class="role-btn" onclick="selectRole('Sales Representative')">Sales Representative</button>
+                    <button class="role-btn" onclick="selectRole('Marketing Manager')">Marketing Manager</button>
+                </div>
+                <button id="start-interview" onclick="startInterview()" disabled>Start Interview</button>
+            </div>
+        </div>
+
+        <!-- Interview Screen -->
+        <div id="interview" class="screen">
+            <div class="container">
+                <div class="interview-header">
+                    <h3 id="question-number">Question 1 of 5</h3>
+                    <div id="timer">30s</div>
+                </div>
+                <div class="video-container">
+                    <video id="video" autoplay muted></video>
+                    <div class="question-box">
+                        <p id="current-question">Loading question...</p>
+                    </div>
+                </div>
+                <div class="controls">
+                    <button id="camera-btn" onclick="toggleCamera()">📹 Camera</button>
+                    <button id="mic-btn" onclick="toggleMic()">🎤 Microphone</button>
+                    <button onclick="nextQuestion()">Next Question</button>
+                    <button onclick="endInterview()">End Interview</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="results" class="screen">
+            <div class="container">
+                <h2>Interview Results</h2>
+                <div class="scores">
+                    <div class="score-card">
+                        <h3>Overall Score</h3>
+                        <div class="score" id="overall-score">0%</div>
+                    </div>
+                    <div class="score-grid">
+                        <div class="score-item">
+                            <span>Body Language</span>
+                            <span id="body-score">0%</span>
+                        </div>
+                        <div class="score-item">
+                            <span>Communication</span>
+                            <span id="comm-score">0%</span>
+                        </div>
+                        <div class="score-item">
+                            <span>Skills</span>
+                            <span id="skills-score">0%</span>
+                        </div>
+                        <div class="score-item">
+                            <span>Confidence</span>
+                            <span id="confidence-score">0%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="feedback">
+                    <h3>Feedback</h3>
+                    <p id="feedback-text">Analyzing your performance...</p>
+                    <div class="strengths">
+                        <h4>Strengths</h4>
+                        <ul id="strengths-list"></ul>
+                    </div>
+                    <div class="improvements">
+                        <h4>Areas for Improvement</h4>
+                        <ul id="improvements-list"></ul>
+                    </div>
+                </div>
+                <button onclick="restart()">Start New Interview</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="minimal.js"></script>
+</body>
+</html>
