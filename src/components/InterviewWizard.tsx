@@ -282,7 +282,7 @@ const InterviewWizard = () => {
     }
   };
 
-  const endInterview = async () => {
+  const endInterview = () => {
     setIsInterviewActive(false);
     setInterviewCompleted(currentQuestionIndex === mockQuestions.length - 1);
     
@@ -300,7 +300,7 @@ const InterviewWizard = () => {
     stopCamera();
     
     // Analyze performance and resume
-    const resumeResult = await analyzeResume(resumeFile, selectedRole);
+    const resumeResult = analyzeResume(resumeFile, selectedRole);
     setResumeAnalysis(resumeResult);
     
     const interviewResult = analyzeInterviewPerformance({
