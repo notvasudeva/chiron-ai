@@ -314,22 +314,24 @@ export const analyzeInterviewPerformance = (
   // Calculate overall score
   const overallScore = Math.round((bodyLanguageScore + grammarScore + skillsScore + confidenceScore) / 4);
 
-  // Enhanced detailed feedback based on specific performance metrics
+  // Much more realistic and harsh feedback
   let feedback = "";
   if (overallScore === 0) {
-    feedback = "Critical Failure: No measurable interview participation detected. You must enable both camera and microphone, then actively engage with the questions. This represents a complete lack of professional readiness for remote interviews.";
-  } else if (overallScore < 10) {
-    feedback = `Severely Inadequate Performance (${overallScore}%): Your interview showed fundamental issues across all assessment areas. You answered only ${questionsAnswered}/${totalQuestions} questions with an average response time of ${avgTimePerQuestion.toFixed(1)} seconds. This suggests either technical difficulties or extreme lack of preparation. Focus on: 1) Ensuring proper A/V setup, 2) Preparing structured answers, 3) Practicing interview scenarios.`;
-  } else if (overallScore < 25) {
-    feedback = `Poor Performance (${overallScore}%): While some basic engagement was detected, your performance falls well below professional standards. Completion rate: ${(completionRate * 100).toFixed(1)}%. Key issues include insufficient question engagement, brief responses (avg ${avgTimePerQuestion.toFixed(1)}s), and ${!cameraUsed ? 'no video presence' : !microphoneUsed ? 'no audio engagement' : 'inconsistent participation'}. Immediate improvement needed in interview preparation and communication skills.`;
+    feedback = "No interview participation detected. Please restart with camera and microphone enabled, and answer the questions.";
+  } else if (overallScore < 15) {
+    feedback = "Extremely poor performance. Interview was not completed properly. Please try again with full setup and engagement.";
+  } else if (overallScore < 30) {
+    feedback = "Very poor interview performance. Major improvements needed in preparation, technology setup, and engagement.";
   } else if (overallScore < 45) {
-    feedback = `Below Average (${overallScore}%): Your interview demonstrates basic participation but lacks the depth and consistency expected in professional settings. You completed ${(completionRate * 100).toFixed(1)}% of questions with responses averaging ${avgTimePerQuestion.toFixed(1)} seconds. While technical setup appears functional, your responses need more substance, structure, and professional polish. Consider practicing STAR method responses and industry-specific examples.`;
-  } else if (overallScore < 65) {
-    feedback = `Average Performance (${overallScore}%): You showed adequate interview skills with ${(completionRate * 100).toFixed(1)}% completion rate and ${avgTimePerQuestion.toFixed(1)}s average response time. Your technical setup and basic communication are functional, but you're missing the compelling details and confident delivery that distinguish strong candidates. Focus on storytelling, specific examples, and demonstrating deeper expertise in your field.`;
-  } else if (overallScore < 80) {
-    feedback = `Good Performance (${overallScore}%): Strong interview showing with consistent engagement (${(completionRate * 100).toFixed(1)}% completion) and well-timed responses (${avgTimePerQuestion.toFixed(1)}s average). You demonstrated professional communication skills and role-relevant knowledge. To reach excellence, work on adding more specific metrics to your examples, showing greater enthusiasm, and providing more strategic insights about the role and industry.`;
+    feedback = "Below average performance. Focus on completing all questions, using proper technology, and providing detailed responses.";
+  } else if (overallScore < 60) {
+    feedback = "Average performance with significant room for improvement. Work on consistency and response quality.";
+  } else if (overallScore < 75) {
+    feedback = "Good performance with some areas for improvement. You're on the right track but can enhance your responses.";
+  } else if (overallScore < 85) {
+    feedback = "Strong interview performance! Excellent engagement and communication skills demonstrated.";
   } else {
-    feedback = `Excellent Performance (${overallScore}%): Outstanding interview demonstration with ${(completionRate * 100).toFixed(1)}% question completion and ${avgTimePerQuestion.toFixed(1)}s average response time. You exhibited professional presence, articulate communication, and strong role-specific competency. Your performance suggests strong interview readiness. Minor refinements could include even more specific quantifiable achievements and deeper strategic thinking about industry challenges.`;
+    feedback = "Outstanding interview performance! Professional, confident, and comprehensive responses throughout.";
   }
 
   return {
