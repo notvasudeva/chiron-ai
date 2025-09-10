@@ -31,81 +31,165 @@ export const analyzeResume = (file: File | null, selectedRole: string): ResumeAn
   const strengths: string[] = [];
   const improvements: string[] = [];
 
-  // Basic file validation (20 points)
+  // File format check (15 points MAX) - Strict requirements
   const allowedTypes = ['.pdf', '.doc', '.docx'];
   const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
   
-  if (allowedTypes.includes(fileExtension)) {
-    score += 20;
-    strengths.push("ATS-friendly file format");
+  if (fileExtension === '.pdf') {
+    score += 15; // PDF is best for ATS
+    strengths.push("PDF format - excellent ATS compatibility");
+  } else if (allowedTypes.includes(fileExtension)) {
+    score += 10; // DOC/DOCX acceptable but not ideal
+    strengths.push("Acceptable ATS format");
+    improvements.push("PDF format is preferred for better ATS parsing");
   } else {
-    improvements.push("Use PDF, DOC, or DOCX format");
+    score += 0; // Zero points for bad formats
+    improvements.push("Use PDF format for optimal ATS compatibility");
   }
 
-  // File size quality check (30 points)
-  if (file.size > 100000 && file.size < 1500000) { // 100KB - 1.5MB (good range)
-    score += 30;
-    strengths.push("Professional resume length and content");
-  } else if (file.size > 50000 && file.size <= 100000) {
+  // File size analysis (20 points MAX) - Very strict on content quality
+  if (file.size < 30000) { // Less than 30KB - likely empty or minimal
+    score += 2;
+    improvements.push("Resume appears too brief - likely lacks sufficient content");
+    improvements.push("Add more experience, skills, and achievements");
+  } else if (file.size < 80000) { // 30-80KB - probably basic
+    score += 8;
+    improvements.push("Resume may lack detailed content - consider adding more specifics");
+  } else if (file.size < 150000) { // 80-150KB - decent content
+    score += 15;
+    strengths.push("Good content length indicating detailed experience");
+  } else if (file.size < 300000) { // 150-300KB - comprehensive
     score += 20;
-    strengths.push("Adequate content length");
-  } else if (file.size <= 50000) {
+    strengths.push("Comprehensive resume with substantial content");
+  } else if (file.size < 500000) { // 300-500KB - quite detailed
+    score += 18;
+    strengths.push("Detailed resume content");
+    improvements.push("Consider optimizing file size while maintaining content");
+  } else { // Over 500KB - too large
     score += 5;
-    improvements.push("Resume appears too brief - add more content");
-  } else {
-    score += 10;
-    improvements.push("File size is large - consider optimizing");
+    improvements.push("File size too large - may indicate formatting issues or unnecessary content");
   }
 
-  // Professional naming (10 points)
+  // Professional naming (10 points MAX) - Strict standards
   const fileName = file.name.toLowerCase();
-  if (fileName.includes('resume') || fileName.includes('cv')) {
+  if (fileName.includes('resume') && (fileName.includes('2024') || fileName.includes('2025'))) {
     score += 10;
+    strengths.push("Professional, current file naming");
+  } else if (fileName.includes('resume') || fileName.includes('cv')) {
+    score += 6;
     strengths.push("Professional file naming");
+    improvements.push("Include current year in filename");
+  } else if (fileName.includes('john') || fileName.includes('jane') || fileName.includes('smith')) {
+    score += 3;
+    improvements.push("Use 'Resume' or 'CV' in filename for better recognition");
   } else {
-    improvements.push("Use professional file naming (include 'resume' or 'CV')");
+    score += 0;
+    improvements.push("Use professional naming: 'FirstName_LastName_Resume_2024.pdf'");
   }
 
-  // Role relevance simulation (40 points)
-  const roleKeywords: Record<string, string[]> = {
-    'Software Engineer': ['javascript', 'python', 'react', 'node', 'git', 'api'],
-    'Product Manager': ['product', 'strategy', 'roadmap', 'stakeholder', 'agile'],
-    'Data Scientist': ['python', 'machine learning', 'sql', 'data', 'analysis'],
-    'UX Designer': ['user experience', 'wireframe', 'prototype', 'design'],
-    'Sales Representative': ['sales', 'client', 'revenue', 'crm'],
-    'Marketing Manager': ['marketing', 'campaign', 'brand', 'digital'],
-    'Business Analyst': ['business', 'analysis', 'requirements'],
-    'DevOps Engineer': ['aws', 'docker', 'kubernetes', 'automation']
+  // Content depth analysis (35 points MAX) - Based on role requirements
+  const roleKeywords: Record<string, { required: string[], bonus: string[], minSize: number }> = {
+    'Software Engineer': { 
+      required: ['javascript', 'python', 'react', 'git'], 
+      bonus: ['node', 'api', 'database', 'typescript'],
+      minSize: 120000 
+    },
+    'Product Manager': { 
+      required: ['product', 'strategy', 'roadmap', 'stakeholder'], 
+      bonus: ['agile', 'analytics', 'user', 'market'],
+      minSize: 100000 
+    },
+    'Data Scientist': { 
+      required: ['python', 'sql', 'data', 'analysis'], 
+      bonus: ['machine learning', 'statistics', 'modeling'],
+      minSize: 110000 
+    },
+    'UX Designer': { 
+      required: ['user', 'design', 'wireframe'], 
+      bonus: ['prototype', 'figma', 'research'],
+      minSize: 90000 
+    },
+    'Sales Representative': { 
+      required: ['sales', 'client', 'revenue'], 
+      bonus: ['crm', 'negotiation', 'target'],
+      minSize: 80000 
+    },
+    'Marketing Manager': { 
+      required: ['marketing', 'campaign', 'digital'], 
+      bonus: ['brand', 'analytics', 'roi'],
+      minSize: 95000 
+    },
+    'Business Analyst': { 
+      required: ['business', 'analysis', 'requirements'], 
+      bonus: ['process', 'stakeholder', 'documentation'],
+      minSize: 100000 
+    },
+    'DevOps Engineer': { 
+      required: ['aws', 'docker', 'automation'], 
+      bonus: ['kubernetes', 'ci/cd', 'monitoring'],
+      minSize: 115000 
+    }
   };
 
-  const relevantKeywords = roleKeywords[selectedRole] || [];
-  let keywordScore = 0;
+  const roleData = roleKeywords[selectedRole] || { required: [], bonus: [], minSize: 90000 };
   
-  // Simulate keyword presence based on file characteristics
-  if (file.size > 80000) keywordScore += 15; // Larger files likely have more keywords
-  if (fileName.includes(selectedRole.toLowerCase().split(' ')[0])) keywordScore += 10;
-  if (file.size > 120000) keywordScore += 15; // Very detailed resumes
-
-  score += keywordScore;
-  
-  if (keywordScore >= 25) {
-    strengths.push("Strong role-specific content");
-  } else if (keywordScore >= 15) {
-    strengths.push("Good role relevance");
+  // Content quality scoring - VERY strict
+  if (file.size < roleData.minSize) {
+    score += 5; // Insufficient content for role
+    improvements.push(`Resume too brief for ${selectedRole} role - needs more technical details`);
+  } else if (file.size < roleData.minSize * 1.3) {
+    score += 15; // Adequate content
+    improvements.push("Add more specific achievements and technical details");
+  } else if (file.size < roleData.minSize * 1.8) {
+    score += 25; // Good content depth
+    strengths.push("Good content depth for role requirements");
   } else {
-    improvements.push(`Include more ${selectedRole} specific keywords and skills`);
+    score += 35; // Excellent content depth
+    strengths.push("Excellent comprehensive content matching role complexity");
   }
 
-  // Generate feedback
+  // Role relevance bonus (20 points MAX) - Simulated keyword analysis
+  let roleRelevanceScore = 0;
+  
+  // Simulate keyword presence based on filename and file characteristics
+  if (fileName.includes(selectedRole.toLowerCase().split(' ')[0])) {
+    roleRelevanceScore += 8;
+    strengths.push("Role-specific terminology in filename");
+  }
+  
+  // Size-based keyword simulation (larger files likely have more relevant content)
+  if (file.size > roleData.minSize * 1.5) {
+    roleRelevanceScore += 12;
+    strengths.push("Comprehensive content likely contains relevant keywords");
+  } else if (file.size > roleData.minSize) {
+    roleRelevanceScore += 6;
+  } else {
+    improvements.push(`Add more ${selectedRole}-specific keywords and technical skills`);
+  }
+
+  score += roleRelevanceScore;
+
+  // HARSH overall assessment - No easy high scores
+  if (score < 25) {
+    improvements.push("Resume needs complete overhaul for professional standards");
+  } else if (score < 45) {
+    improvements.push("Significant improvements needed across multiple areas");
+  } else if (score < 65) {
+    improvements.push("Good foundation but needs optimization for competitive edge");
+  }
+
+  // Generate realistic feedback
   let feedback = "";
   if (score >= 85) {
-    feedback = `Excellent resume! Strong ${selectedRole} alignment with professional formatting.`;
+    feedback = `Excellent resume! Outstanding ${selectedRole} optimization with professional formatting and comprehensive content.`;
   } else if (score >= 70) {
-    feedback = `Good resume with solid ${selectedRole} potential. Minor optimizations needed.`;
+    feedback = `Good resume with solid ${selectedRole} potential. Some optimization opportunities remain.`;
   } else if (score >= 50) {
-    feedback = `Average resume. Needs better ${selectedRole} keyword optimization.`;
+    feedback = `Average resume. Needs better ${selectedRole} keyword optimization and content depth.`;
+  } else if (score >= 30) {
+    feedback = `Below average resume. Significant improvements needed for ${selectedRole} competitiveness.`;
   } else {
-    feedback = `Poor resume quality. Significant improvements needed for ${selectedRole} role.`;
+    feedback = `Poor resume quality. Major overhaul required for ${selectedRole} role consideration.`;
   }
 
   return {
